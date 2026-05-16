@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: service-ui
+  template:
+    metadata:
+      labels:
+        app: service-ui
+    spec:
+      containers:
+        - name: service-ui
+          image: europe-west1-docker.pkg.dev/mern-grid-cluster/mern-repo/service-ui:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: "production"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-ui
+spec:
+  selector:
+    app: service-ui
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 3000
