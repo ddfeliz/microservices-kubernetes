@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-compute
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: service-compute
+  template:
+    metadata:
+      labels:
+        app: service-compute
+    spec:
+      containers:
+        - name: service-compute
+          image: europe-west1-docker.pkg.dev/mern-grid-cluster/mern-repo/service-compute:latest
+          ports:
+            - containerPort: 5004
+          env:
+            - name: PORT
+              value: "5004"
+          resources:
+            requests:
+              cpu: "200m" # baseline déclaré
+              memory: "128Mi"
+            limits:
+              cpu: "500m" # plafond — HPA déclenche à 50% = 100m
+              memory: "256Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-compute
+spec:
+  selector:
+    app: service-compute
+  ports:
+    - port: 5004
+      targetPort: 5004

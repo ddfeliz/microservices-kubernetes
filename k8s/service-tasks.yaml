@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-tasks
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: service-tasks
+  template:
+    metadata:
+      labels:
+        app: service-tasks
+    spec:
+      containers:
+        - name: service-tasks
+          image: europe-west1-docker.pkg.dev/mern-grid-cluster/mern-repo/service-tasks:latest
+          ports:
+            - containerPort: 5001
+          env:
+            - name: PORT
+              value: "5001"
+            - name: MONGO_URI
+              value: "mongodb://mongo:27017/tasksdb"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "300m"
+              memory: "256Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-tasks
+spec:
+  selector:
+    app: service-tasks
+  ports:
+    - port: 5001
+      targetPort: 5001

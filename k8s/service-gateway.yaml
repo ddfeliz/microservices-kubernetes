@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: service-gateway
+  template:
+    metadata:
+      labels:
+        app: service-gateway
+    spec:
+      containers:
+        - name: service-gateway
+          image: europe-west1-docker.pkg.dev/mern-grid-cluster/mern-repo/service-gateway:latest
+          ports:
+            - containerPort: 4000
+          env:
+            - name: PORT
+              value: "4000"
+            - name: TASKS_URL
+              value: "http://service-tasks:5001"
+            - name: USERS_URL
+              value: "http://service-users:5002"
+            - name: NOTIFY_URL
+              value: "http://service-notify:5003"
+            - name: COMPUTE_URL
+              value: "http://service-compute:5004"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "300m"
+              memory: "256Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-gateway
+spec:
+  selector:
+    app: service-gateway
+  type: LoadBalancer # ← expose le gateway sur internet
+  ports:
+    - port: 80
+      targetPort: 4000
