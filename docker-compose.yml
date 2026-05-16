@@ -11,7 +11,7 @@ services:
       - mongo-data:/data/db
 
   service-tasks:
-    build: ./service-tasks
+    build: ./services/tasks
     container_name: service-tasks
     ports:
       - "5001:5001"
@@ -22,7 +22,7 @@ services:
       MONGO_URI: mongodb://mongo:27017/tasksdb
 
   service-users:
-    build: ./service-users
+    build: ./services/users
     container_name: service-users
     ports:
       - "5002:5002"
@@ -33,7 +33,7 @@ services:
       MONGO_URI: mongodb://mongo:27017/usersdb
 
   service-notify:
-    build: ./service-notify
+    build: ./services/notify
     container_name: service-notify
     ports:
       - "5003:5003"
@@ -44,7 +44,7 @@ services:
       MONGO_URI: mongodb://mongo:27017/notifydb
 
   service-compute:
-    build: ./service-compute
+    build: ./services/compute
     container_name: service-compute
     ports:
       - "5004:5004"
@@ -52,7 +52,7 @@ services:
       PORT: 5004
 
   service-gateway:
-    build: ./service-gateway
+    build: ./services/gateway
     container_name: service-gateway
     ports:
       - "4000:4000"

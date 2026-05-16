@@ -14,10 +14,18 @@ const SERVICES = {
     compute: process.env.COMPUTE_URL,
 };
 
-// Proxy simple avec fetch natif Node 18+
+
+app.get("/health", (req, res) =>
+    res.json({ status: "ok", service: "gateway", services: SERVICES })
+);
+
+// Proxy corrigé
 async function proxyRequest(req, res, targetUrl) {
     try {
-        const url = `${targetUrl}${req.path}${req.url.includes("?") ? "?" + req.url.split("?")[1] : ""}`;
+        const query = req.url.includes("?") ? "?" + req.url.split("?")[1] : "";
+        const subPath = req.path === "/" ? "" : req.path;
+        const url = `${targetUrl}${subPath}${query}`;   // ← path correctement reconstruit
+
         const options = {
             method: req.method,
             headers: { "Content-Type": "application/json" },
@@ -25,7 +33,8 @@ async function proxyRequest(req, res, targetUrl) {
         if (["POST", "PUT", "PATCH"].includes(req.method)) {
             options.body = JSON.stringify(req.body);
         }
-        const response = await fetch(url);
+
+        const response = await fetch(url, options);     // ← options bien passées
         const data = await response.json();
         res.status(response.status).json(data);
     } catch (err) {
@@ -33,15 +42,12 @@ async function proxyRequest(req, res, targetUrl) {
     }
 }
 
-app.get("/health", (req, res) =>
-    res.json({ status: "ok", service: "gateway", services: SERVICES })
-);
+// Routes — on inclut le path cible dans l'URL de base
+app.use("/api/tasks", (req, res) => proxyRequest(req, res, `${SERVICES.tasks}/tasks`));
+app.use("/api/users", (req, res) => proxyRequest(req, res, `${SERVICES.users}/users`));
+app.use("/api/notify", (req, res) => proxyRequest(req, res, `${SERVICES.notify}/notifications`));
+app.use("/api/compute", (req, res) => proxyRequest(req, res, `${SERVICES.compute}/compute`));
 
-// Routes vers chaque service
-app.use("/api/tasks", (req, res) => proxyRequest(req, res, SERVICES.tasks));
-app.use("/api/users", (req, res) => proxyRequest(req, res, SERVICES.users));
-app.use("/api/notify", (req, res) => proxyRequest(req, res, SERVICES.notify));
-app.use("/api/compute", (req, res) => proxyRequest(req, res, SERVICES.compute));
 
 app.listen(process.env.PORT, () =>
     console.log(`service-gateway sur port ${process.env.PORT}`)
