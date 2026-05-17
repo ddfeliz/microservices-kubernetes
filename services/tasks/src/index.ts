@@ -8,7 +8,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ── Types ────────────────────────────────────────
 type LeaveStatus = "pending" | "approved" | "rejected" | "cancelled";
 type LeaveType =
   | "Congé Payé"
@@ -49,7 +48,6 @@ interface StatusUpdateBody {
   approvedBy?: string;
 }
 
-// ── Schéma ───────────────────────────────────────
 const leaveSchema = new Schema<ILeave>(
   {
     employeeId: { type: String, required: true },
@@ -87,7 +85,6 @@ const leaveSchema = new Schema<ILeave>(
 
 const Leave = mongoose.model<ILeave>("Leave", leaveSchema);
 
-// ── Validation ───────────────────────────────────
 function validate(req: Request, res: Response, next: NextFunction): void {
   const { employeeId, employeeName, type, startDate, endDate, days } =
     req.body as Partial<ILeave>;
@@ -107,7 +104,6 @@ function validate(req: Request, res: Response, next: NextFunction): void {
   next();
 }
 
-// ── Routes ───────────────────────────────────────
 app.get("/health", (_req: Request, res: Response) =>
   res.json({ status: "ok", service: "leaves", pod: process.env.HOSTNAME }),
 );

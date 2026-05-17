@@ -8,7 +8,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ── Types ────────────────────────────────────────
 interface IAddress {
   street: string;
   city: string;
@@ -48,7 +47,6 @@ interface EmployeeQuery {
   $or?: Record<string, unknown>[];
 }
 
-// ── Schéma ───────────────────────────────────────
 const employeeSchema = new Schema<IEmployee>(
   {
     firstName: { type: String, required: true, trim: true },
@@ -99,18 +97,15 @@ const employeeSchema = new Schema<IEmployee>(
   { timestamps: true },
 );
 
-// Remplacer le pre hook par :
 employeeSchema.pre("save", async function () {
   if (!this.employeeId) {
     const count = await Employee.countDocuments();
     this.employeeId = `EMP-${String(count + 1).padStart(4, "0")}`;
   }
-  // pas de next() avec async pre hooks dans mongoose 6+
 });
 
 const Employee = mongoose.model<IEmployee>("Employee", employeeSchema);
 
-// ── Validation middleware ─────────────────────────
 function validate(req: Request, res: Response, next: NextFunction): void {
   const { firstName, lastName, email, position, department } =
     req.body as Partial<IEmployee>;
@@ -127,7 +122,6 @@ function validate(req: Request, res: Response, next: NextFunction): void {
   next();
 }
 
-// ── Routes ───────────────────────────────────────
 app.get("/health", (_req: Request, res: Response) =>
   res.json({ status: "ok", service: "employees", pod: process.env.HOSTNAME }),
 );

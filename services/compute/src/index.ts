@@ -7,7 +7,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ── Types ────────────────────────────────────────
 interface EmployeePayrollInput {
   name: string;
   salary: number;
@@ -52,7 +51,6 @@ interface BatchResult {
   pod: string | undefined;
 }
 
-// ── Calculs CPU intensifs ─────────────────────────
 function fibonacci(n: number): number {
   if (n <= 1) return n;
   return fibonacci(n - 1) + fibonacci(n - 2);
@@ -130,7 +128,6 @@ function computeHRStats(employees: EmployeePayrollInput[]): HRStats {
   };
 }
 
-// ── Routes ───────────────────────────────────────
 app.get("/health", (_req: Request, res: Response) =>
   res.json({ status: "ok", service: "payroll", pod: process.env.HOSTNAME }),
 );

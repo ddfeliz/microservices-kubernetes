@@ -8,7 +8,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ── Types ────────────────────────────────────────
 type NotifType = "info" | "success" | "warning" | "error";
 type NotifCategory =
   | "conge"
@@ -43,7 +42,6 @@ interface NotifQuery {
   priority?: string;
 }
 
-// ── Schéma ───────────────────────────────────────
 const notificationSchema = new Schema<INotification>(
   {
     employeeId: { type: String, default: "all" },
@@ -79,7 +77,6 @@ const Notification = mongoose.model<INotification>(
   notificationSchema,
 );
 
-// ── Routes ───────────────────────────────────────
 app.get("/health", (_req: Request, res: Response) =>
   res.json({ status: "ok", service: "notify", pod: process.env.HOSTNAME }),
 );
