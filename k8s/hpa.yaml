@@ -15,7 +15,7 @@ spec:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: 50 # scale si CPU > 50% du request (200m)
+          averageUtilization: 50
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler

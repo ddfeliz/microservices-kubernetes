@@ -7,50 +7,42 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ── Schéma riche ────────────────────────────────
 const employeeSchema = new mongoose.Schema({
-    // Identité
     firstName: { type: String, required: true, trim: true },
     lastName: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true },
     phone: { type: String, default: "" },
-    avatar: { type: String, default: "" }, // URL ou initiales
+    avatar: { type: String, default: "" },
 
-    // Poste
     position: { type: String, required: true },
     department: {
         type: String, required: true, enum: [
             "Engineering", "HR", "Finance", "Marketing", "Operations", "Legal", "Sales"
         ]
     },
-    employeeId: { type: String, unique: true }, // ex: EMP-0042
+    employeeId: { type: String, unique: true },
     managerId: { type: mongoose.Schema.Types.ObjectId, ref: "Employee", default: null },
 
-    // Contrat
     hireDate: { type: Date, default: Date.now },
     contractType: { type: String, enum: ["CDI", "CDD", "Stage", "Alternance"], default: "CDI" },
     salary: { type: Number, default: 0 },
     status: { type: String, enum: ["active", "inactive", "onLeave"], default: "active" },
 
-    // Adresse
     address: {
         street: { type: String, default: "" },
         city: { type: String, default: "" },
         country: { type: String, default: "France" },
     },
 
-    // Compétences
     skills: [{ type: String }],
 
-    // Congés (compteurs)
     leaveBalance: {
-        paid: { type: Number, default: 25 },  // CP annuels
-        rtt: { type: Number, default: 10 },  // RTT
-        sick: { type: Number, default: 0 },   // Maladie prise
+        paid: { type: Number, default: 25 },
+        rtt: { type: Number, default: 10 },
+        sick: { type: Number, default: 0 },
     },
 }, { timestamps: true });
 
-// Générer automatiquement l'employeeId
 employeeSchema.pre("save", async function (next) {
     if (!this.employeeId) {
         const count = await mongoose.model("Employee").countDocuments();
@@ -61,7 +53,6 @@ employeeSchema.pre("save", async function (next) {
 
 const Employee = mongoose.model("Employee", employeeSchema);
 
-// ── Middleware validation ────────────────────────
 function validate(req, res, next) {
     const { firstName, lastName, email, position, department } = req.body;
     const errors = [];
@@ -74,12 +65,10 @@ function validate(req, res, next) {
     next();
 }
 
-// ── Routes ───────────────────────────────────────
 app.get("/health", (req, res) =>
     res.json({ status: "ok", service: "employees", pod: process.env.HOSTNAME })
 );
 
-// GET tous les employés avec filtres
 app.get("/employees", async (req, res) => {
     try {
         const { department, status, search, page = 1, limit = 20 } = req.query;
@@ -106,7 +95,6 @@ app.get("/employees", async (req, res) => {
     }
 });
 
-// GET stats département
 app.get("/employees/stats", async (req, res) => {
     try {
         const byDepartment = await Employee.aggregate([
@@ -133,7 +121,6 @@ app.get("/employees/stats", async (req, res) => {
     }
 });
 
-// GET un employé
 app.get("/employees/:id", async (req, res) => {
     try {
         const emp = await Employee.findById(req.params.id)
@@ -145,7 +132,6 @@ app.get("/employees/:id", async (req, res) => {
     }
 });
 
-// POST créer un employé
 app.post("/employees", validate, async (req, res) => {
     try {
         const emp = new Employee(req.body);
@@ -157,7 +143,6 @@ app.post("/employees", validate, async (req, res) => {
     }
 });
 
-// PATCH modifier un employé
 app.patch("/employees/:id", async (req, res) => {
     try {
         const emp = await Employee.findByIdAndUpdate(
@@ -170,7 +155,6 @@ app.patch("/employees/:id", async (req, res) => {
     }
 });
 
-// DELETE supprimer un employé
 app.delete("/employees/:id", async (req, res) => {
     try {
         const emp = await Employee.findByIdAndDelete(req.params.id);
@@ -181,7 +165,6 @@ app.delete("/employees/:id", async (req, res) => {
     }
 });
 
-// POST seed de données de démo
 app.post("/employees/seed", async (req, res) => {
     try {
         await Employee.deleteMany({});
@@ -204,7 +187,6 @@ app.post("/employees/seed", async (req, res) => {
     }
 });
 
-// ── Démarrage ────────────────────────────────────
 mongoose.connect(process.env.MONGO_URI)
     .then(() => {
         console.log("MongoDB connecté");

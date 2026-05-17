@@ -39,4 +39,4 @@ spec:
     app: mongo
   ports:
     - port: 27017
-  clusterIP: None # headless service pour StatefulSet
+  clusterIP: None

@@ -7,10 +7,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ── Schéma ───────────────────────────────────────
 const leaveSchema = new mongoose.Schema({
-    employeeId: { type: String, required: true }, // EMP-0001
-    employeeName: { type: String, required: true }, // dénormalisé pour perf
+    employeeId: { type: String, required: true },
+    employeeName: { type: String, required: true },
     department: { type: String, default: "" },
 
     type: {
@@ -31,8 +30,8 @@ const leaveSchema = new mongoose.Schema({
     },
 
     reason: { type: String, default: "" },
-    comment: { type: String, default: "" }, // commentaire RH
-    approvedBy: { type: String, default: null }, // employeeId du manager
+    comment: { type: String, default: "" },
+    approvedBy: { type: String, default: null },
     approvedAt: { type: Date, default: null },
 
     attachments: [{ name: String, url: String }],
@@ -40,7 +39,6 @@ const leaveSchema = new mongoose.Schema({
 
 const Leave = mongoose.model("Leave", leaveSchema);
 
-// ── Validation ───────────────────────────────────
 function validate(req, res, next) {
     const { employeeId, employeeName, type, startDate, endDate, days } = req.body;
     const errors = [];
@@ -56,12 +54,10 @@ function validate(req, res, next) {
     next();
 }
 
-// ── Routes ───────────────────────────────────────
 app.get("/health", (req, res) =>
     res.json({ status: "ok", service: "leaves", pod: process.env.HOSTNAME })
 );
 
-// GET toutes les demandes avec filtres
 app.get("/leaves", async (req, res) => {
     try {
         const { status, employeeId, type, page = 1, limit = 20 } = req.query;
@@ -82,7 +78,6 @@ app.get("/leaves", async (req, res) => {
     }
 });
 
-// GET stats congés
 app.get("/leaves/stats", async (req, res) => {
     try {
         const byStatus = await Leave.aggregate([
@@ -105,7 +100,6 @@ app.get("/leaves/stats", async (req, res) => {
     }
 });
 
-// GET une demande
 app.get("/leaves/:id", async (req, res) => {
     try {
         const leave = await Leave.findById(req.params.id);
@@ -116,7 +110,6 @@ app.get("/leaves/:id", async (req, res) => {
     }
 });
 
-// POST créer une demande
 app.post("/leaves", validate, async (req, res) => {
     try {
         const leave = new Leave(req.body);
@@ -127,7 +120,6 @@ app.post("/leaves", validate, async (req, res) => {
     }
 });
 
-// PATCH approuver / rejeter
 app.patch("/leaves/:id/status", async (req, res) => {
     try {
         const { status, comment, approvedBy } = req.body;
@@ -146,7 +138,6 @@ app.patch("/leaves/:id/status", async (req, res) => {
     }
 });
 
-// DELETE annuler
 app.delete("/leaves/:id", async (req, res) => {
     try {
         const leave = await Leave.findByIdAndDelete(req.params.id);
@@ -157,7 +148,6 @@ app.delete("/leaves/:id", async (req, res) => {
     }
 });
 
-// POST seed
 app.post("/leaves/seed", async (req, res) => {
     try {
         await Leave.deleteMany({});

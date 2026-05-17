@@ -6,7 +6,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// URLs des services (depuis .env)
 const SERVICES = {
     tasks: process.env.TASKS_URL,
     users: process.env.USERS_URL,
@@ -19,12 +18,11 @@ app.get("/health", (req, res) =>
     res.json({ status: "ok", service: "gateway", services: SERVICES })
 );
 
-// Proxy corrigé
 async function proxyRequest(req, res, targetUrl) {
     try {
         const query = req.url.includes("?") ? "?" + req.url.split("?")[1] : "";
         const subPath = req.path === "/" ? "" : req.path;
-        const url = `${targetUrl}${subPath}${query}`;   // ← path correctement reconstruit
+        const url = `${targetUrl}${subPath}${query}`;
 
         const options = {
             method: req.method,
@@ -34,7 +32,7 @@ async function proxyRequest(req, res, targetUrl) {
             options.body = JSON.stringify(req.body);
         }
 
-        const response = await fetch(url, options);     // ← options bien passées
+        const response = await fetch(url, options);
         const data = await response.json();
         res.status(response.status).json(data);
     } catch (err) {

@@ -7,9 +7,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ── Schéma ───────────────────────────────────────
 const notificationSchema = new mongoose.Schema({
-    employeeId: { type: String, default: "all" }, // "all" = broadcast
+    employeeId: { type: String, default: "all" },
     employeeName: { type: String, default: "Tous" },
 
     title: { type: String, required: true },
@@ -33,21 +32,18 @@ const notificationSchema = new mongoose.Schema({
 
     read: { type: Boolean, default: false },
     readAt: { type: Date, default: null },
-    actionUrl: { type: String, default: "" }, // lien vers la ressource
+    actionUrl: { type: String, default: "" },
     actionLabel: { type: String, default: "" },
 
-    // Qui a émis la notif
     sentBy: { type: String, default: "system" },
 }, { timestamps: true });
 
 const Notification = mongoose.model("Notification", notificationSchema);
 
-// ── Routes ───────────────────────────────────────
 app.get("/health", (req, res) =>
     res.json({ status: "ok", service: "notify", pod: process.env.HOSTNAME })
 );
 
-// GET toutes les notifications
 app.get("/notifications", async (req, res) => {
     try {
         const { employeeId, read, category, priority, page = 1, limit = 20 } = req.query;
@@ -70,7 +66,6 @@ app.get("/notifications", async (req, res) => {
     }
 });
 
-// GET stats
 app.get("/notifications/stats", async (req, res) => {
     try {
         const byCategory = await Notification.aggregate([
@@ -94,7 +89,6 @@ app.get("/notifications/stats", async (req, res) => {
     }
 });
 
-// POST créer
 app.post("/notifications", async (req, res) => {
     try {
         const { title, message } = req.body;
@@ -108,7 +102,6 @@ app.post("/notifications", async (req, res) => {
     }
 });
 
-// PATCH marquer comme lu
 app.patch("/notifications/:id/read", async (req, res) => {
     try {
         const notif = await Notification.findByIdAndUpdate(
@@ -123,7 +116,6 @@ app.patch("/notifications/:id/read", async (req, res) => {
     }
 });
 
-// PATCH marquer toutes comme lues
 app.patch("/notifications/read-all", async (req, res) => {
     try {
         const { employeeId } = req.body;
@@ -137,7 +129,6 @@ app.patch("/notifications/read-all", async (req, res) => {
     }
 });
 
-// DELETE
 app.delete("/notifications/:id", async (req, res) => {
     try {
         await Notification.findByIdAndDelete(req.params.id);
@@ -147,7 +138,6 @@ app.delete("/notifications/:id", async (req, res) => {
     }
 });
 
-// POST seed
 app.post("/notifications/seed", async (req, res) => {
     try {
         await Notification.deleteMany({});
