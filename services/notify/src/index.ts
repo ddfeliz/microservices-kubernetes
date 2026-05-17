@@ -1,5 +1,5 @@
 import express, { Request, Response } from "express";
-import mongoose, { Schema, Document } from "mongoose";
+import mongoose, { Schema, Document, QueryFilter } from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
 dotenv.config();
@@ -96,11 +96,11 @@ app.get(
         page = "1",
         limit = "20",
       } = req.query as Record<string, string>;
-      const filter: NotifQuery = {};
+      const filter: QueryFilter<INotification> = {};
       if (employeeId) filter.$or = [{ employeeId }, { employeeId: "all" }];
       if (read !== undefined) filter.read = read === "true";
-      if (category) filter.category = category;
-      if (priority) filter.priority = priority;
+      if (category) filter.category = category as NotifCategory;
+      if (priority) filter.priority = priority as NotifPriority;
 
       const [total, unread, notifications] = await Promise.all([
         Notification.countDocuments(filter),

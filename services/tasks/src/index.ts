@@ -1,5 +1,5 @@
 import express, { Request, Response, NextFunction } from "express";
-import mongoose, { Schema, Document } from "mongoose";
+import mongoose, { Schema, Document, QueryFilter } from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
 dotenv.config();
@@ -121,10 +121,10 @@ app.get("/leaves", async (req: Request, res: Response): Promise<void> => {
       page = "1",
       limit = "20",
     } = req.query as Record<string, string>;
-    const filter: LeaveQuery = {};
-    if (status) filter.status = status;
+    const filter: QueryFilter<ILeave> = {};
+    if (status) filter.status = status as LeaveStatus;
     if (employeeId) filter.employeeId = employeeId;
-    if (type) filter.type = type;
+    if (type) filter.type = type as LeaveType;
 
     const total = await Leave.countDocuments(filter);
     const leaves = await Leave.find(filter)

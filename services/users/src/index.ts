@@ -99,12 +99,13 @@ const employeeSchema = new Schema<IEmployee>(
   { timestamps: true },
 );
 
-employeeSchema.pre("save", async function (next) {
+// Remplacer le pre hook par :
+employeeSchema.pre("save", async function () {
   if (!this.employeeId) {
     const count = await Employee.countDocuments();
     this.employeeId = `EMP-${String(count + 1).padStart(4, "0")}`;
   }
-  next();
+  // pas de next() avec async pre hooks dans mongoose 6+
 });
 
 const Employee = mongoose.model<IEmployee>("Employee", employeeSchema);
