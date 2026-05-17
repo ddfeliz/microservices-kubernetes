@@ -42,10 +42,11 @@ async function proxyRequest(req, res, targetUrl) {
     }
 }
 
-// Routes — on inclut le path cible dans l'URL de base
-app.use("/api/tasks", (req, res) => proxyRequest(req, res, `${SERVICES.tasks}/tasks`));
-app.use("/api/users", (req, res) => proxyRequest(req, res, `${SERVICES.users}/users`));
+
+app.use("/api/employees", (req, res) => proxyRequest(req, res, `${SERVICES.users}/employees`));
+app.use("/api/leaves", (req, res) => proxyRequest(req, res, `${SERVICES.tasks}/leaves`));
 app.use("/api/notify", (req, res) => proxyRequest(req, res, `${SERVICES.notify}/notifications`));
+app.use("/api/payroll", (req, res) => proxyRequest(req, res, `${SERVICES.compute}/payroll`));
 app.use("/api/compute", (req, res) => proxyRequest(req, res, `${SERVICES.compute}/compute`));
 
 
