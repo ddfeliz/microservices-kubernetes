@@ -1,7 +1,4 @@
-version: "3.9"
-
 services:
-
   mongo:
     image: mongo:6
     container_name: mongo
@@ -19,7 +16,7 @@ services:
       - mongo
     environment:
       PORT: 5001
-      MONGO_URI: mongodb://mongo:27017/tasksdb
+      MONGO_URI: mongodb://mongo:27017/leavesdb
 
   service-users:
     build: ./services/users
@@ -30,7 +27,7 @@ services:
       - mongo
     environment:
       PORT: 5002
-      MONGO_URI: mongodb://mongo:27017/usersdb
+      MONGO_URI: mongodb://mongo:27017/employeesdb
 
   service-notify:
     build: ./services/notify
@@ -67,6 +64,19 @@ services:
       USERS_URL: http://service-users:5002
       NOTIFY_URL: http://service-notify:5003
       COMPUTE_URL: http://service-compute:5004
+
+  service-ui:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_GATEWAY_URL: http://localhost:4000
+    container_name: service-ui
+    ports:
+      - "3000:3000"
+    depends_on:
+      - service-gateway
+    environment:
+      NODE_ENV: production
 
 volumes:
   mongo-data:
