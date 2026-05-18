@@ -47,6 +47,8 @@ interface EmployeeQuery {
   $or?: Record<string, unknown>[];
 }
 
+type EmployeeStatus = "active" | "inactive" | "onLeave";
+
 const employeeSchema = new Schema<IEmployee>(
   {
     firstName: { type: String, required: true, trim: true },
@@ -286,6 +288,7 @@ app.post(
   async (_req: Request, res: Response): Promise<void> => {
     try {
       await Employee.deleteMany({});
+      // On utilise create() en boucle pour déclencher le pre-hook
       const demoEmployees: Partial<IEmployee>[] = [
         {
           firstName: "Sophie",
@@ -405,11 +408,17 @@ app.post(
           contractType: "Stage",
           salary: 12000,
           skills: ["Canva", "Réseaux sociaux"],
-          status: "inactive",
+          status: "inactive" as EmployeeStatus,
           address: { street: "", city: "Paris", country: "France" },
         },
       ];
-      const created = await Employee.insertMany(demoEmployees);
+
+      const created: IEmployee[] = [];
+      for (const emp of demoEmployees) {
+        const e = await Employee.create(emp); // pre-hook déclenché → employeeId généré
+        created.push(e);
+      }
+
       res.json({
         message: `${created.length} employés créés`,
         count: created.length,
