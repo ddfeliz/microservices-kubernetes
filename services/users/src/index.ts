@@ -288,7 +288,6 @@ app.post(
   async (_req: Request, res: Response): Promise<void> => {
     try {
       await Employee.deleteMany({});
-      // On utilise create() en boucle pour déclencher le pre-hook
       const demoEmployees: Partial<IEmployee>[] = [
         {
           firstName: "Sophie",
@@ -415,7 +414,7 @@ app.post(
 
       const created: IEmployee[] = [];
       for (const emp of demoEmployees) {
-        const e = await Employee.create(emp); // pre-hook déclenché → employeeId généré
+        const e = await Employee.create(emp);
         created.push(e);
       }
 
