@@ -43,7 +43,7 @@ metadata:
 spec:
   selector:
     app: service-gateway
-  type: LoadBalancer # ← expose le gateway sur internet
+  type: LoadBalancer
   ports:
     - port: 80
       targetPort: 4000
