@@ -1,14 +1,13 @@
-
 import http from "k6/http";
 import { check, sleep, group } from "k6";
 import { Rate, Trend } from "k6/metrics";
 
 const errorRate = new Rate("errors");
 const computeLatency = new Trend("compute_latency", true);
-const employeesLatency = new Trend("employees_latency", true);
-const leavesLatency = new Trend("leaves_latency", true);
-const notifyLatency = new Trend("notify_latency", true);
-const payrollLatency = new Trend("payroll_latency", true);
+const patientsLatency = new Trend("patients_latency", true);
+const appointmentsLatency = new Trend("appointments_latency", true);
+const alertsLatency = new Trend("alerts_latency", true);
+const billingLatency = new Trend("billing_latency", true);
 
 const GW = __ENV.GATEWAY_URL || "http://34.156.96.146";
 const JSON_HEADERS = { headers: { "Content-Type": "application/json" } };
@@ -34,7 +33,7 @@ export default function () {
     const id = `${__VU}-${__ITER}`;
     counter++;
 
-    group("GET compute", () => {
+    group("GET medical compute", () => {
         const t = Date.now();
         const r = http.get(`${GW}/api/compute?n=38`);
         computeLatency.add(Date.now() - t);
@@ -47,112 +46,112 @@ export default function () {
     });
     sleep(0.3);
 
-    group("GET employees", () => {
+    group("GET patients", () => {
         const t = Date.now();
         const r = http.get(`${GW}/api/employees?limit=20`);
-        employeesLatency.add(Date.now() - t);
+        patientsLatency.add(Date.now() - t);
         errorRate.add(!check(r, {
-            "employees 200": (r) => r.status === 200,
+            "patients 200": (r) => r.status === 200,
         }));
     });
     sleep(0.2);
 
-    group("POST employee", () => {
+    group("POST patient", () => {
         const payload = JSON.stringify({
-            firstName: `Load`,
+            firstName: `Patient`,
             lastName: `Test${counter}`,
-            email: `load.test${counter}-${id}@k6.io`,
+            email: `patient.test${counter}-${id}@k6.io`,
             phone: "06 00 00 00 00",
-            position: "Testeur K6",
-            department: "Engineering",
-            contractType: "CDD",
+            position: "Médecin traitant",
+            department: "Cardiologie",
+            contractType: "Consultation externe",
             salary: 35000,
-            skills: ["k6", "load-testing"],
+            skills: ["Hypertension", "Diabète"],
             address: { street: "", city: "Paris", country: "France" },
         });
         const r = http.post(`${GW}/api/employees`, payload, JSON_HEADERS);
         errorRate.add(!check(r, {
-            "create emp 201": (r) => r.status === 201,
+            "create patient 201": (r) => r.status === 201,
         }));
     });
     sleep(0.2);
 
-    group("GET emp stats", () => {
+    group("GET patient stats", () => {
         const r = http.get(`${GW}/api/employees/stats`);
-        errorRate.add(!check(r, { "emp stats 200": (r) => r.status === 200 }));
+        errorRate.add(!check(r, { "patient stats 200": (r) => r.status === 200 }));
     });
     sleep(0.2);
 
-    group("GET leaves", () => {
+    group("GET appointments", () => {
         const t = Date.now();
         const r = http.get(`${GW}/api/leaves?limit=20`);
-        leavesLatency.add(Date.now() - t);
-        errorRate.add(!check(r, { "leaves 200": (r) => r.status === 200 }));
+        appointmentsLatency.add(Date.now() - t);
+        errorRate.add(!check(r, { "appointments 200": (r) => r.status === 200 }));
     });
     sleep(0.2);
 
-    group("POST leave", () => {
+    group("POST appointment", () => {
         const payload = JSON.stringify({
-            employeeId: `EMP-K6-${counter}`,
-            employeeName: `K6 User ${counter}`,
-            department: "Engineering",
-            type: "RTT",
+            employeeId: `PAT-K6-${counter}`,
+            employeeName: `Patient K6 ${counter}`,
+            department: "Cardiologie",
+            type: "Consultation générale",
             startDate: "2026-07-01",
-            endDate: "2026-07-02",
+            endDate: "14:30",
             days: 1,
-            reason: "Load test k6",
+            reason: "Test de charge k6 - symptômes: fatigue",
         });
         const r = http.post(`${GW}/api/leaves`, payload, JSON_HEADERS);
         errorRate.add(!check(r, {
-            "create leave 201": (r) => r.status === 201,
+            "create appointment 201": (r) => r.status === 201,
         }));
     });
     sleep(0.2);
 
-    group("GET leave stats", () => {
+    group("GET appointment stats", () => {
         const r = http.get(`${GW}/api/leaves/stats`);
-        errorRate.add(!check(r, { "leave stats 200": (r) => r.status === 200 }));
+        errorRate.add(!check(r, { "appointment stats 200": (r) => r.status === 200 }));
     });
     sleep(0.2);
 
-    group("GET notifications", () => {
+    group("GET medical alerts", () => {
         const t = Date.now();
         const r = http.get(`${GW}/api/notify?limit=20`);
-        notifyLatency.add(Date.now() - t);
-        errorRate.add(!check(r, { "notify 200": (r) => r.status === 200 }));
+        alertsLatency.add(Date.now() - t);
+        errorRate.add(!check(r, { "alerts 200": (r) => r.status === 200 }));
     });
     sleep(0.2);
 
-    group("POST notification", () => {
+    group("POST medical alert", () => {
         const payload = JSON.stringify({
-            title: `Alerte charge #${counter}`,
-            message: `Notification de test k6 - itération ${counter}`,
+            title: `Alerte médicale #${counter}`,
+            message: `Résultat d'analyse urgent - patient ${counter} - paramètres anormaux détectés`,
             type: "warning",
-            category: "systeme",
-            priority: "medium",
+            category: "urgence",
+            priority: "high",
             employeeId: "all",
-            employeeName: "Tous",
+            employeeName: "Tous les patients",
         });
         const r = http.post(`${GW}/api/notify`, payload, JSON_HEADERS);
         errorRate.add(!check(r, {
-            "create notif 201": (r) => r.status === 201,
+            "create alert 201": (r) => r.status === 201,
         }));
     });
     sleep(0.2);
 
-    group("POST payroll", () => {
+    group("POST medical billing", () => {
         const t = Date.now();
         const payload = JSON.stringify({
-            name: `Employee K6 ${counter}`,
+            name: `Patient K6 ${counter}`,
             salary: 45000 + Math.floor(Math.random() * 30000),
-            department: ["Engineering", "HR", "Finance", "Marketing", "Sales"][counter % 5],
-            contractType: "CDI",
+            department: ["Cardiologie", "Pédiatrie", "Neurologie", "Dermatologie", "Urgences"][counter % 5],
+            contractType: "Hospitalisation",
             seniority: Math.floor(Math.random() * 10),
         });
         const r = http.post(`${GW}/api/payroll/calculate`, payload, JSON_HEADERS);
-        payrollLatency.add(Date.now() - t);
+        billingLatency.add(Date.now() - t);
         errorRate.add(!check(r, {
-            "payroll 200": (r) => r.status === 200,
+            "billing 200": (r) => r.status === 200,
             "has netTotal": (r) => {
                 try { return JSON.parse(r.body).netTotal > 0; } catch { return false; }
             },
@@ -161,19 +160,19 @@ export default function () {
     sleep(0.2);
 
     if (counter % 5 === 0) {
-        group("POST payroll batch", () => {
-            const emps = [];
+        group("POST batch billing", () => {
+            const patients = [];
             for (let i = 0; i < 10; i++) {
-                emps.push({
-                    name: `Batch Employee ${i}`,
+                patients.push({
+                    name: `Batch Patient ${i}`,
                     salary: 40000 + i * 5000,
-                    department: "Engineering",
-                    contractType: "CDI",
+                    department: "Cardiologie",
+                    contractType: "Hospitalisation",
                 });
             }
-            const r = http.post(`${GW}/api/payroll/batch`, JSON.stringify({ employees: emps }), JSON_HEADERS);
+            const r = http.post(`${GW}/api/payroll/batch`, JSON.stringify({ employees: patients }), JSON_HEADERS);
             errorRate.add(!check(r, {
-                "batch 200": (r) => r.status === 200,
+                "batch billing 200": (r) => r.status === 200,
             }));
         });
         sleep(0.3);

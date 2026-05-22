@@ -14,13 +14,20 @@ interface IAddress {
   country: string;
 }
 
-interface ILeaveBalance {
-  paid: number;
-  rtt: number;
-  sick: number;
+interface IMedicalHistory {
+  antecedents: string[];
+  allergies: string[];
+  traitements: string[];
+  groupeSanguin?: string;
 }
 
-interface IEmployee extends Document {
+interface IPatientBalance {
+  consultations: number;
+  examens: number;
+  hospitalisations: number;
+}
+
+interface IPatient extends Document {
   firstName: string;
   lastName: string;
   email: string;
@@ -28,55 +35,66 @@ interface IEmployee extends Document {
   avatar: string;
   position: string;
   department: string;
-  employeeId: string;
-  managerId: Types.ObjectId | null;
-  hireDate: Date;
+  patientId: string;
+  referringDoctorId: Types.ObjectId | null;
+  admissionDate: Date;
   contractType: string;
   salary: number;
   status: string;
   address: IAddress;
+  medicalHistory: IMedicalHistory;
   skills: string[];
-  leaveBalance: ILeaveBalance;
+  patientBalance: IPatientBalance;
   createdAt: Date;
   updatedAt: Date;
 }
 
-interface EmployeeQuery {
+interface PatientQuery {
   department?: string;
   status?: string;
   $or?: Record<string, unknown>[];
 }
 
-type EmployeeStatus = "active" | "inactive" | "onLeave";
+type PatientStatus = "active" | "inactive" | "onLeave";
 
-const employeeSchema = new Schema<IEmployee>(
+// Définition des enums validés
+const VALID_DEPARTMENTS = [
+  "Cardiologie",
+  "Pédiatrie",
+  "Neurologie",
+  "Dermatologie",
+  "Urgences",
+  "Chirurgie",
+  "Radiologie",
+];
+
+const VALID_CONTRACT_TYPES = [
+  "Hospitalisation",
+  "Consultation externe",
+  "Urgence",
+  "Soins de suite",
+];
+
+const patientSchema = new Schema<IPatient>(
   {
     firstName: { type: String, required: true, trim: true },
     lastName: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true },
     phone: { type: String, default: "" },
     avatar: { type: String, default: "" },
-    position: { type: String, required: true },
+    position: { type: String, required: true, default: "Médecin traitant" },
     department: {
       type: String,
       required: true,
-      enum: [
-        "Engineering",
-        "HR",
-        "Finance",
-        "Marketing",
-        "Operations",
-        "Legal",
-        "Sales",
-      ],
+      enum: VALID_DEPARTMENTS,
     },
-    employeeId: { type: String, unique: true },
-    managerId: { type: Schema.Types.ObjectId, ref: "Employee", default: null },
-    hireDate: { type: Date, default: Date.now },
+    patientId: { type: String, unique: true },
+    referringDoctorId: { type: Schema.Types.ObjectId, ref: "Patient", default: null },
+    admissionDate: { type: Date, default: Date.now },
     contractType: {
       type: String,
-      enum: ["CDI", "CDD", "Stage", "Alternance"],
-      default: "CDI",
+      enum: VALID_CONTRACT_TYPES,
+      default: "Consultation externe",
     },
     salary: { type: Number, default: 0 },
     status: {
@@ -89,34 +107,49 @@ const employeeSchema = new Schema<IEmployee>(
       city: { type: String, default: "" },
       country: { type: String, default: "France" },
     },
+    medicalHistory: {
+      antecedents: [{ type: String }],
+      allergies: [{ type: String }],
+      traitements: [{ type: String }],
+      groupeSanguin: { type: String, default: "" },
+    },
     skills: [{ type: String }],
-    leaveBalance: {
-      paid: { type: Number, default: 25 },
-      rtt: { type: Number, default: 10 },
-      sick: { type: Number, default: 0 },
+    patientBalance: {
+      consultations: { type: Number, default: 0 },
+      examens: { type: Number, default: 0 },
+      hospitalisations: { type: Number, default: 0 },
     },
   },
-  { timestamps: true },
+  { 
+    timestamps: true,
+    strict: false // Permet de gérer les anciennes données temporairement
+  }
 );
 
-employeeSchema.pre("save", async function () {
-  if (!this.employeeId) {
-    const count = await Employee.countDocuments();
-    this.employeeId = `EMP-${String(count + 1).padStart(4, "0")}`;
+patientSchema.pre("save", async function () {
+  if (!this.patientId) {
+    const count = await Patient.countDocuments();
+    this.patientId = `PAT-${String(count + 1).padStart(4, "0")}`;
   }
 });
 
-const Employee = mongoose.model<IEmployee>("Employee", employeeSchema);
+const Patient = mongoose.model<IPatient>("Patient", patientSchema);
 
 function validate(req: Request, res: Response, next: NextFunction): void {
-  const { firstName, lastName, email, position, department } =
-    req.body as Partial<IEmployee>;
+  const { firstName, lastName, email, position, department, contractType } =
+    req.body as Partial<IPatient>;
   const errors: string[] = [];
   if (!firstName?.trim()) errors.push("firstName requis");
   if (!lastName?.trim()) errors.push("lastName requis");
   if (!email?.includes("@")) errors.push("email invalide");
-  if (!position?.trim()) errors.push("position requise");
-  if (!department) errors.push("department requis");
+  if (!position?.trim()) errors.push("médecin traitant requis");
+  if (!department) errors.push("service médical requis");
+  if (department && !VALID_DEPARTMENTS.includes(department)) {
+    errors.push(`department invalide. Valeurs acceptées: ${VALID_DEPARTMENTS.join(", ")}`);
+  }
+  if (contractType && !VALID_CONTRACT_TYPES.includes(contractType)) {
+    errors.push(`contractType invalide. Valeurs acceptées: ${VALID_CONTRACT_TYPES.join(", ")}`);
+  }
   if (errors.length) {
     res.status(400).json({ errors });
     return;
@@ -125,10 +158,10 @@ function validate(req: Request, res: Response, next: NextFunction): void {
 }
 
 app.get("/health", (_req: Request, res: Response) =>
-  res.json({ status: "ok", service: "employees", pod: process.env.HOSTNAME }),
+  res.json({ status: "ok", service: "patients", pod: process.env.HOSTNAME }),
 );
 
-app.get("/employees", async (req: Request, res: Response): Promise<void> => {
+app.get("/patients", async (req: Request, res: Response): Promise<void> => {
   try {
     const {
       department,
@@ -137,7 +170,7 @@ app.get("/employees", async (req: Request, res: Response): Promise<void> => {
       page = "1",
       limit = "20",
     } = req.query as Record<string, string>;
-    const filter: EmployeeQuery = {};
+    const filter: PatientQuery = {};
     if (department) filter.department = department;
     if (status) filter.status = status;
     if (search)
@@ -145,18 +178,18 @@ app.get("/employees", async (req: Request, res: Response): Promise<void> => {
         { firstName: new RegExp(search, "i") },
         { lastName: new RegExp(search, "i") },
         { email: new RegExp(search, "i") },
-        { employeeId: new RegExp(search, "i") },
+        { patientId: new RegExp(search, "i") },
       ];
 
-    const total = await Employee.countDocuments(filter);
-    const employees = await Employee.find(filter)
-      .populate("managerId", "firstName lastName employeeId")
+    const total = await Patient.countDocuments(filter);
+    const patients = await Patient.find(filter)
+      .populate("referringDoctorId", "firstName lastName patientId position")
       .sort({ createdAt: -1 })
       .skip((parseInt(page) - 1) * parseInt(limit))
       .limit(parseInt(limit));
 
     res.json({
-      data: employees,
+      data: patients,
       total,
       page: parseInt(page),
       limit: parseInt(limit),
@@ -167,31 +200,31 @@ app.get("/employees", async (req: Request, res: Response): Promise<void> => {
 });
 
 app.get(
-  "/employees/stats",
+  "/patients/stats",
   async (_req: Request, res: Response): Promise<void> => {
     try {
-      const [byDepartment, byStatus, byContract, total, avgSalaryResult] =
+      const [byDepartment, byStatus, byContract, total, avgCostResult] =
         await Promise.all([
-          Employee.aggregate<{ _id: string; count: number; avgSalary: number }>(
+          Patient.aggregate<{ _id: string; count: number; avgCost: number }>(
             [
               {
                 $group: {
                   _id: "$department",
                   count: { $sum: 1 },
-                  avgSalary: { $avg: "$salary" },
+                  avgCost: { $avg: "$salary" },
                 },
               },
               { $sort: { count: -1 } },
             ],
           ),
-          Employee.aggregate<{ _id: string; count: number }>([
+          Patient.aggregate<{ _id: string; count: number }>([
             { $group: { _id: "$status", count: { $sum: 1 } } },
           ]),
-          Employee.aggregate<{ _id: string; count: number }>([
+          Patient.aggregate<{ _id: string; count: number }>([
             { $group: { _id: "$contractType", count: { $sum: 1 } } },
           ]),
-          Employee.countDocuments(),
-          Employee.aggregate<{ _id: null; avg: number }>([
+          Patient.countDocuments(),
+          Patient.aggregate<{ _id: null; avg: number }>([
             { $group: { _id: null, avg: { $avg: "$salary" } } },
           ]),
         ]);
@@ -201,7 +234,7 @@ app.get(
         byDepartment,
         byStatus,
         byContract,
-        avgSalary: Math.round(avgSalaryResult[0]?.avg ?? 0),
+        avgCost: Math.round(avgCostResult[0]?.avg ?? 0),
       });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
@@ -210,18 +243,18 @@ app.get(
 );
 
 app.get(
-  "/employees/:id",
+  "/patients/:id",
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const emp = await Employee.findById(req.params.id).populate(
-        "managerId",
-        "firstName lastName employeeId position",
+      const patient = await Patient.findById(req.params.id).populate(
+        "referringDoctorId",
+        "firstName lastName patientId position department",
       );
-      if (!emp) {
-        res.status(404).json({ error: "Employé non trouvé" });
+      if (!patient) {
+        res.status(404).json({ error: "Patient non trouvé" });
         return;
       }
-      res.json(emp);
+      res.json(patient);
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }
@@ -229,13 +262,13 @@ app.get(
 );
 
 app.post(
-  "/employees",
+  "/patients",
   validate,
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const emp = new Employee(req.body as Partial<IEmployee>);
-      await emp.save();
-      res.status(201).json(emp);
+      const patient = new Patient(req.body as Partial<IPatient>);
+      await patient.save();
+      res.status(201).json(patient);
     } catch (err) {
       const mongoErr = err as { code?: number; message: string };
       if (mongoErr.code === 11000) {
@@ -248,19 +281,19 @@ app.post(
 );
 
 app.patch(
-  "/employees/:id",
+  "/patients/:id",
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const emp = await Employee.findByIdAndUpdate(
+      const patient = await Patient.findByIdAndUpdate(
         req.params.id,
-        req.body as Partial<IEmployee>,
+        req.body as Partial<IPatient>,
         { new: true, runValidators: true },
       );
-      if (!emp) {
-        res.status(404).json({ error: "Employé non trouvé" });
+      if (!patient) {
+        res.status(404).json({ error: "Patient non trouvé" });
         return;
       }
-      res.json(emp);
+      res.json(patient);
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }
@@ -268,15 +301,15 @@ app.patch(
 );
 
 app.delete(
-  "/employees/:id",
+  "/patients/:id",
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const emp = await Employee.findByIdAndDelete(req.params.id);
-      if (!emp) {
-        res.status(404).json({ error: "Employé non trouvé" });
+      const patient = await Patient.findByIdAndDelete(req.params.id);
+      if (!patient) {
+        res.status(404).json({ error: "Patient non trouvé" });
         return;
       }
-      res.json({ message: "Employé supprimé", id: req.params.id });
+      res.json({ message: "Patient supprimé", id: req.params.id });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }
@@ -284,142 +317,194 @@ app.delete(
 );
 
 app.post(
-  "/employees/seed",
+  "/patients/seed",
   async (_req: Request, res: Response): Promise<void> => {
     try {
-      await Employee.deleteMany({});
-      const demoEmployees: Partial<IEmployee>[] = [
+      // Supprimer l'ancienne collection pour recréer avec le nouveau schéma
+      await Patient.deleteMany({});
+      
+      const demoPatients: Partial<IPatient>[] = [
         {
           firstName: "Sophie",
           lastName: "Martin",
-          email: "s.martin@rh.com",
+          email: "s.martin@medical.fr",
           phone: "06 12 34 56 78",
-          position: "DRH",
-          department: "HR",
-          contractType: "CDI",
+          position: "Dr. Dupont",
+          department: "Cardiologie",
+          contractType: "Hospitalisation",
           salary: 75000,
-          skills: ["Recrutement", "GPEC", "Droit du travail"],
+          medicalHistory: {
+            antecedents: ["Hypertension", "Diabète type 2"],
+            allergies: ["Pénicilline"],
+            traitements: ["Metformine", "Lisinopril"],
+            groupeSanguin: "A+",
+          },
           address: { street: "", city: "Paris", country: "France" },
         },
         {
           firstName: "Lucas",
           lastName: "Bernard",
-          email: "l.bernard@rh.com",
+          email: "l.bernard@medical.fr",
           phone: "06 23 45 67 89",
-          position: "Lead Developer",
-          department: "Engineering",
-          contractType: "CDI",
-          salary: 68000,
-          skills: ["Node.js", "React", "Kubernetes", "Docker"],
+          position: "Dr. Martin",
+          department: "Pédiatrie",
+          contractType: "Consultation externe",
+          salary: 50000,
+          medicalHistory: {
+            antecedents: ["Asthme"],
+            allergies: ["Acariens"],
+            traitements: ["Ventoline"],
+            groupeSanguin: "O+",
+          },
           address: { street: "", city: "Lyon", country: "France" },
         },
         {
           firstName: "Emma",
           lastName: "Dubois",
-          email: "e.dubois@rh.com",
+          email: "e.dubois@medical.fr",
           phone: "06 34 56 78 90",
-          position: "DevOps Engineer",
-          department: "Engineering",
-          contractType: "CDI",
+          position: "Dr. Laurent",
+          department: "Neurologie",
+          contractType: "Hospitalisation",
           salary: 65000,
-          skills: ["GKE", "Terraform", "CI/CD"],
+          medicalHistory: {
+            antecedents: ["Migraines chroniques"],
+            allergies: [],
+            traitements: ["Triptans"],
+            groupeSanguin: "B-",
+          },
           address: { street: "", city: "Bordeaux", country: "France" },
         },
         {
           firstName: "Thomas",
           lastName: "Petit",
-          email: "t.petit@rh.com",
+          email: "t.petit@medical.fr",
           phone: "06 45 67 89 01",
-          position: "CFO",
-          department: "Finance",
-          contractType: "CDI",
-          salary: 90000,
-          skills: ["Comptabilité", "Audit", "Excel"],
+          position: "Dr. Rousseau",
+          department: "Urgences",
+          contractType: "Urgence",
+          salary: 60000,
+          medicalHistory: {
+            antecedents: ["Fracture tibia 2020"],
+            allergies: ["Codéine"],
+            traitements: [],
+            groupeSanguin: "AB+",
+          },
           address: { street: "", city: "Paris", country: "France" },
         },
         {
           firstName: "Camille",
           lastName: "Robert",
-          email: "c.robert@rh.com",
+          email: "c.robert@medical.fr",
           phone: "06 56 78 90 12",
-          position: "Marketing Manager",
-          department: "Marketing",
-          contractType: "CDI",
-          salary: 58000,
-          skills: ["SEO", "Content", "Analytics"],
+          position: "Dr. Lefebvre",
+          department: "Dermatologie",
+          contractType: "Consultation externe",
+          salary: 48000,
+          medicalHistory: {
+            antecedents: ["Eczéma", "Allergies saisonnières"],
+            allergies: ["Pollens"],
+            traitements: ["Antihistaminiques"],
+            groupeSanguin: "A-",
+          },
           address: { street: "", city: "Nantes", country: "France" },
         },
         {
           firstName: "Antoine",
           lastName: "Leroy",
-          email: "a.leroy@rh.com",
+          email: "a.leroy@medical.fr",
           phone: "06 67 89 01 23",
-          position: "Backend Developer",
-          department: "Engineering",
-          contractType: "CDI",
+          position: "Dr. Moreau",
+          department: "Radiologie",
+          contractType: "Consultation externe",
           salary: 55000,
-          skills: ["Python", "MongoDB", "REST API"],
+          medicalHistory: {
+            antecedents: ["Lombalgies chroniques"],
+            allergies: [],
+            traitements: ["Anti-inflammatoires"],
+            groupeSanguin: "O-",
+          },
           address: { street: "", city: "Toulouse", country: "France" },
         },
         {
           firstName: "Julie",
           lastName: "Moreau",
-          email: "j.moreau@rh.com",
+          email: "j.moreau@medical.fr",
           phone: "06 78 90 12 34",
-          position: "RH Chargée",
-          department: "HR",
-          contractType: "CDI",
-          salary: 42000,
-          skills: ["Recrutement", "Formation"],
+          position: "Dr. Bernard",
+          department: "Chirurgie",
+          contractType: "Hospitalisation",
+          salary: 82000,
+          medicalHistory: {
+            antecedents: ["Appendicectomie 2019"],
+            allergies: ["Latex"],
+            traitements: [],
+            groupeSanguin: "B+",
+          },
           address: { street: "", city: "Lille", country: "France" },
         },
         {
           firstName: "Nicolas",
           lastName: "Simon",
-          email: "n.simon@rh.com",
+          email: "n.simon@medical.fr",
           phone: "06 89 01 23 45",
-          position: "Sales Manager",
-          department: "Sales",
-          contractType: "CDI",
+          position: "Dr. Dubois",
+          department: "Cardiologie",
+          contractType: "Urgence",
           salary: 62000,
-          skills: ["Prospection", "CRM", "Négociation"],
+          medicalHistory: {
+            antecedents: ["Infarctus 2022"],
+            allergies: ["Aspirine"],
+            traitements: ["Clopidogrel", "Atorvastatine"],
+            groupeSanguin: "A+",
+          },
           address: { street: "", city: "Marseille", country: "France" },
         },
         {
           firstName: "Laura",
           lastName: "Michel",
-          email: "l.michel@rh.com",
+          email: "l.michel@medical.fr",
           phone: "",
-          position: "Alternante Dev",
-          department: "Engineering",
-          contractType: "Alternance",
-          salary: 18000,
-          skills: ["JavaScript", "React"],
+          position: "Dr. Petit",
+          department: "Pédiatrie",
+          contractType: "Soins de suite",
+          salary: 38000,
+          medicalHistory: {
+            antecedents: ["Prématurité"],
+            allergies: ["Lactose"],
+            traitements: ["Lait sans lactose"],
+            groupeSanguin: "AB-",
+          },
           address: { street: "", city: "Lyon", country: "France" },
         },
         {
           firstName: "Maxime",
           lastName: "Garcia",
-          email: "m.garcia@rh.com",
+          email: "m.garcia@medical.fr",
           phone: "",
-          position: "Stagiaire Marketing",
-          department: "Marketing",
-          contractType: "Stage",
-          salary: 12000,
-          skills: ["Canva", "Réseaux sociaux"],
-          status: "inactive" as EmployeeStatus,
+          position: "Dr. Lefevre",
+          department: "Dermatologie",
+          contractType: "Consultation externe",
+          salary: 42000,
+          medicalHistory: {
+            antecedents: ["Acné sévère"],
+            allergies: [],
+            traitements: ["Roaccutane"],
+            groupeSanguin: "O+",
+          },
+          status: "inactive" as PatientStatus,
           address: { street: "", city: "Paris", country: "France" },
         },
       ];
 
-      const created: IEmployee[] = [];
-      for (const emp of demoEmployees) {
-        const e = await Employee.create(emp);
-        created.push(e);
+      const created: IPatient[] = [];
+      for (const patient of demoPatients) {
+        const p = await Patient.create(patient);
+        created.push(p);
       }
 
       res.json({
-        message: `${created.length} employés créés`,
+        message: `${created.length} patients créés`,
         count: created.length,
       });
     } catch (err) {
@@ -428,10 +513,33 @@ app.post(
   },
 );
 
+// Fonction pour nettoyer l'ancienne collection
+app.post(
+  "/patients/migrate",
+  async (_req: Request, res: Response): Promise<void> => {
+    try {
+      // Supprimer tous les documents existants
+      const deletedCount = await Patient.deleteMany({});
+      res.json({ 
+        message: "Base patients nettoyée", 
+        deletedCount: deletedCount.deletedCount 
+      });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  },
+);
+
 mongoose
-  .connect(process.env.MONGO_URI || "mongodb://mongo:27017/employeesdb")
-  .then(() => {
-    const PORT = parseInt(process.env.PORT || "5002");
-    app.listen(PORT, () => console.log(`service-employees sur port ${PORT}`));
+  .connect(process.env.MONGO_URI || "mongodb://mongo:27017/patientsdb")
+  .then(async () => {
+    console.log("Connecté à MongoDB");
+    
+    // Optionnel: Nettoyer l'ancienne collection au démarrage
+    // await Patient.deleteMany({});
+    // console.log("Anciennes données nettoyées");
+    
+    const PORT = parseInt(process.env.PORT || "5001");
+    app.listen(PORT, () => console.log(`service-patients sur port ${PORT}`));
   })
   .catch((err) => console.error("Erreur MongoDB:", err));

@@ -10,17 +10,17 @@ app.use(express.json());
 
 type NotifType = "info" | "success" | "warning" | "error";
 type NotifCategory =
-  | "conge"
-  | "paie"
-  | "rh"
-  | "systeme"
-  | "anniversaire"
-  | "contrat";
+  | "consultation"
+  | "resultat"
+  | "urgence"
+  | "rappel"
+  | "ordonnance"
+  | "hospitalisation";
 type NotifPriority = "low" | "medium" | "high" | "urgent";
 
 interface INotification extends Document {
-  employeeId: string;
-  employeeName: string;
+  patientId: string;
+  patientName: string;
   title: string;
   message: string;
   type: NotifType;
@@ -44,8 +44,8 @@ interface NotifQuery {
 
 const notificationSchema = new Schema<INotification>(
   {
-    employeeId: { type: String, default: "all" },
-    employeeName: { type: String, default: "Tous" },
+    patientId: { type: String, default: "all" },
+    patientName: { type: String, default: "Tous les patients" },
     title: { type: String, required: true },
     message: { type: String, required: true },
     type: {
@@ -55,8 +55,8 @@ const notificationSchema = new Schema<INotification>(
     },
     category: {
       type: String,
-      enum: ["conge", "paie", "rh", "systeme", "anniversaire", "contrat"],
-      default: "rh",
+      enum: ["consultation", "resultat", "urgence", "rappel", "ordonnance", "hospitalisation"],
+      default: "consultation",
     },
     priority: {
       type: String,
@@ -78,15 +78,15 @@ const Notification = mongoose.model<INotification>(
 );
 
 app.get("/health", (_req: Request, res: Response) =>
-  res.json({ status: "ok", service: "notify", pod: process.env.HOSTNAME }),
+  res.json({ status: "ok", service: "medical-alerts", pod: process.env.HOSTNAME }),
 );
 
 app.get(
-  "/notifications",
+  "/alerts",
   async (req: Request, res: Response): Promise<void> => {
     try {
       const {
-        employeeId,
+        patientId,
         read,
         category,
         priority,
@@ -94,12 +94,12 @@ app.get(
         limit = "20",
       } = req.query as Record<string, string>;
       const filter: QueryFilter<INotification> = {};
-      if (employeeId) filter.$or = [{ employeeId }, { employeeId: "all" }];
+      if (patientId) filter.$or = [{ patientId }, { patientId: "all" }];
       if (read !== undefined) filter.read = read === "true";
       if (category) filter.category = category as NotifCategory;
       if (priority) filter.priority = priority as NotifPriority;
 
-      const [total, unread, notifications] = await Promise.all([
+      const [total, unread, alerts] = await Promise.all([
         Notification.countDocuments(filter),
         Notification.countDocuments({ ...filter, read: false }),
         Notification.find(filter)
@@ -109,7 +109,7 @@ app.get(
       ]);
 
       res.json({
-        data: notifications,
+        data: alerts,
         total,
         unread,
         page: parseInt(page),
@@ -122,7 +122,7 @@ app.get(
 );
 
 app.get(
-  "/notifications/stats",
+  "/alerts/stats",
   async (_req: Request, res: Response): Promise<void> => {
     try {
       const [byCategory, byPriority, total, unread] = await Promise.all([
@@ -149,21 +149,21 @@ app.get(
 );
 
 app.post(
-  "/notifications",
+  "/alerts",
   async (req: Request, res: Response): Promise<void> => {
     try {
       const { title, message } = req.body as Partial<INotification>;
       if (!title?.trim()) {
-        res.status(400).json({ error: "title requis" });
+        res.status(400).json({ error: "titre requis" });
         return;
       }
       if (!message?.trim()) {
         res.status(400).json({ error: "message requis" });
         return;
       }
-      const notif = new Notification(req.body as Partial<INotification>);
-      await notif.save();
-      res.status(201).json(notif);
+      const alert = new Notification(req.body as Partial<INotification>);
+      await alert.save();
+      res.status(201).json(alert);
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }
@@ -171,19 +171,19 @@ app.post(
 );
 
 app.patch(
-  "/notifications/:id/read",
+  "/alerts/:id/read",
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const notif = await Notification.findByIdAndUpdate(
+      const alert = await Notification.findByIdAndUpdate(
         req.params.id,
         { read: true, readAt: new Date() },
         { new: true },
       );
-      if (!notif) {
-        res.status(404).json({ error: "Notification non trouvée" });
+      if (!alert) {
+        res.status(404).json({ error: "Alerte médicale non trouvée" });
         return;
       }
-      res.json(notif);
+      res.json(alert);
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }
@@ -191,12 +191,12 @@ app.patch(
 );
 
 app.patch(
-  "/notifications/read-all",
+  "/alerts/read-all",
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const { employeeId } = req.body as { employeeId?: string };
-      const filter = employeeId
-        ? { $or: [{ employeeId }, { employeeId: "all" }], read: false }
+      const { patientId } = req.body as { patientId?: string };
+      const filter = patientId
+        ? { $or: [{ patientId }, { patientId: "all" }], read: false }
         : { read: false };
       const result = await Notification.updateMany(filter, {
         read: true,
@@ -210,11 +210,11 @@ app.patch(
 );
 
 app.delete(
-  "/notifications/:id",
+  "/alerts/:id",
   async (req: Request, res: Response): Promise<void> => {
     try {
       await Notification.findByIdAndDelete(req.params.id);
-      res.json({ message: "Supprimée" });
+      res.json({ message: "Alerte supprimée" });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }
@@ -222,101 +222,115 @@ app.delete(
 );
 
 app.post(
-  "/notifications/seed",
+  "/alerts/seed",
   async (_req: Request, res: Response): Promise<void> => {
     try {
       await Notification.deleteMany({});
-      const notifs: Partial<INotification>[] = [
+      const alerts: Partial<INotification>[] = [
         {
-          employeeId: "all",
-          employeeName: "Tous",
-          title: "Mise à jour politique télétravail",
-          message:
-            "La nouvelle charte télétravail entre en vigueur le 1er juin 2026.",
+          patientId: "all",
+          patientName: "Tous les patients",
+          title: "Campagne de vaccination annuelle",
+          message: "La campagne de vaccination antigrippale commence le 1er octobre 2026.",
           type: "info",
-          category: "rh",
+          category: "rappel",
           priority: "high",
-          sentBy: "DRH",
+          sentBy: "Service Prévention",
         },
         {
-          employeeId: "EMP-0006",
-          employeeName: "Antoine Leroy",
-          title: "Demande de congé en attente",
-          message:
-            "Votre demande de congé du 14 au 25 juillet est en cours d'examen.",
+          patientId: "PAT-0006",
+          patientName: "Antoine Leroy",
+          title: "Résultat d'analyse disponible",
+          message: "Vos résultats d'analyse sanguine sont disponibles sur votre espace patient.",
           type: "warning",
-          category: "conge",
+          category: "resultat",
           priority: "medium",
-          sentBy: "system",
+          sentBy: "Laboratoire",
         },
         {
-          employeeId: "EMP-0007",
-          employeeName: "Julie Moreau",
-          title: "Congé maternité approuvé ✓",
-          message:
-            "Votre congé maternité du 15 juin au 15 septembre a été approuvé.",
+          patientId: "PAT-0007",
+          patientName: "Julie Moreau",
+          title: "Consultation confirmée ✓",
+          message: "Votre consultation du 15 juin avec le Dr. Dubois a été confirmée.",
           type: "success",
-          category: "conge",
+          category: "consultation",
           priority: "high",
-          sentBy: "Sophie Martin",
+          sentBy: "Secrétariat",
         },
         {
-          employeeId: "all",
-          employeeName: "Tous",
-          title: "Fiches de paie Mai 2026 disponibles",
-          message:
-            "Les bulletins de salaire de mai sont disponibles dans votre espace.",
+          patientId: "all",
+          patientName: "Tous les patients",
+          title: "Nouveau service de téléconsultation",
+          message: "Découvrez notre nouveau service de téléconsultation disponible 24h/24.",
           type: "info",
-          category: "paie",
+          category: "consultation",
           priority: "medium",
-          sentBy: "Finance",
+          sentBy: "Direction médicale",
         },
         {
-          employeeId: "EMP-0002",
-          employeeName: "Lucas Bernard",
-          title: "Entretien annuel planifié",
-          message: "Votre entretien annuel est fixé au 28 mai 2026 à 14h.",
+          patientId: "PAT-0002",
+          patientName: "Lucas Bernard",
+          title: "Rappel de contrôle annuel",
+          message: "Votre contrôle annuel est programmé pour le 28 mai 2026.",
           type: "info",
-          category: "rh",
+          category: "rappel",
           priority: "medium",
-          sentBy: "RH",
+          sentBy: "Service Prévention",
         },
         {
-          employeeId: "EMP-0008",
-          employeeName: "Nicolas Simon",
-          title: "Demande de congé refusée",
-          message:
-            "Votre demande de congé sans solde du 1er au 15 août a été refusée.",
+          patientId: "PAT-0008",
+          patientName: "Nicolas Simon",
+          title: "Rendez-vous reporté",
+          message: "Votre rendez-vous du 1er août a été reporté au 15 août pour cause d'urgence.",
           type: "error",
-          category: "conge",
+          category: "urgence",
           priority: "high",
-          sentBy: "Direction",
+          sentBy: "Secrétariat",
         },
         {
-          employeeId: "all",
-          employeeName: "Tous",
-          title: "🎂 Anniversaire - Emma Dubois",
-          message:
-            "Souhaitons un joyeux anniversaire à Emma Dubois (Engineering) !",
+          patientId: "all",
+          patientName: "Tous les patients",
+          title: "🏥 Nouveau service - Cardiologie",
+          message: "Le service de cardiologie s'enrichit d'un nouveau plateau technique.",
           type: "info",
-          category: "anniversaire",
+          category: "hospitalisation",
           priority: "low",
-          sentBy: "system",
+          sentBy: "Direction médicale",
         },
         {
-          employeeId: "EMP-0009",
-          employeeName: "Laura Michel",
-          title: "Fin de contrat - Alternance",
-          message: "Votre contrat d'alternance se termine le 31 août 2026.",
+          patientId: "PAT-0009",
+          patientName: "Laura Michel",
+          title: "Fin de traitement - Soins de suite",
+          message: "Votre traitement de soins de suite se termine le 31 août 2026.",
           type: "warning",
-          category: "contrat",
+          category: "hospitalisation",
           priority: "urgent",
-          sentBy: "system",
+          sentBy: "Service Soins",
+        },
+        {
+          patientId: "PAT-0010",
+          patientName: "Sophie Martinez",
+          title: "Ordonnance disponible",
+          message: "Votre nouvelle ordonnance est disponible en téléchargement.",
+          type: "info",
+          category: "ordonnance",
+          priority: "medium",
+          sentBy: "Dr. Martin",
+        },
+        {
+          patientId: "PAT-0011",
+          patientName: "Thomas Petit",
+          title: "Urgence - Résultats IRM",
+          message: "Vos résultats IRM montrent des anomalies. Contactez rapidement votre médecin.",
+          type: "error",
+          category: "urgence",
+          priority: "urgent",
+          sentBy: "Radiologie",
         },
       ];
-      const created = await Notification.insertMany(notifs);
+      const created = await Notification.insertMany(alerts);
       res.json({
-        message: `${created.length} notifications créées`,
+        message: `${created.length} alertes médicales créées`,
         count: created.length,
       });
     } catch (err) {
@@ -326,9 +340,9 @@ app.post(
 );
 
 mongoose
-  .connect(process.env.MONGO_URI || "mongodb://mongo:27017/notifydb")
+  .connect(process.env.MONGO_URI || "mongodb://mongo:27017/alertsdb")
   .then(() => {
     const PORT = parseInt(process.env.PORT || "5003");
-    app.listen(PORT, () => console.log(`service-notify sur port ${PORT}`));
+    app.listen(PORT, () => console.log(`service-medical-alerts sur port ${PORT}`));
   })
   .catch((err) => console.error("Erreur MongoDB:", err));

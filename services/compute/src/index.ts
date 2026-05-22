@@ -7,46 +7,46 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-interface EmployeePayrollInput {
+interface PatientBillingInput {
   name: string;
-  salary: number;
-  department: string;
-  contractType: string;
-  seniority?: number;
+  salary: number;        // Coût total des soins
+  department: string;    // Service médical
+  contractType: string;  // Type de séjour
+  seniority?: number;    // Ancienneté patient (patient fidèle)
 }
 
-interface PayslipResult {
-  employee: string;
+interface BillingResult {
+  patient: string;
   department: string;
   contractType: string;
-  gross: number;
-  employeeContributions: number;
-  employerContributions: number;
-  netBeforeTax: number;
-  seniorityBonus: number;
-  perfBonus: number;
-  mealVouchers: number;
-  netTotal: number;
+  gross: number;                    // Coût total des soins
+  patientContributions: number;     // Part patient (mutuelle + ticket modérateur)
+  insuranceContributions: number;   // Prise en charge sécurité sociale / mutuelle
+  netBeforeInsurance: number;       // Net avant prise en charge
+  seniorityBonus: number;           // Prime patient fidèle
+  preventionBonus: number;          // Programme prévention santé
+  mealVouchers: number;             // Forfaits hospitaliers
+  patientOutOfPocket: number;       // Reste à charge patient
   fibonacciCheck: number;
 }
 
-interface HRStats {
+interface MedicalStats {
   total: number;
-  avgSalary: number;
-  medianSalary: number;
-  minSalary: number;
-  maxSalary: number;
+  avgCost: number;          // Coût moyen des soins
+  medianCost: number;
+  minCost: number;
+  maxCost: number;
   byDept: Record<
     string,
-    { count: number; totalSalary: number; avgSalary: number }
+    { count: number; totalCost: number; avgCost: number }
   >;
   fibonacciCheck: number;
 }
 
 interface BatchResult {
   count: number;
-  payslips: PayslipResult[];
-  totalPayroll: number;
+  billings: BillingResult[];
+  totalBilling: number;     // Coût total des soins
   durationMs: number;
   pod: string | undefined;
 }
@@ -64,85 +64,94 @@ function bubbleSort(arr: number[]): number[] {
   return a;
 }
 
-function calculatePayslip(employee: EmployeePayrollInput): PayslipResult {
-  const { name, salary, department, contractType, seniority = 0 } = employee;
-  const monthly = salary / 12;
-  const employerContributions = monthly * 0.45;
-  const employeeContributions = monthly * 0.22;
-  const netBeforeTax = monthly - employeeContributions;
-  const seniorityBonus = Math.min(seniority * 0.02, 0.2) * monthly;
-  const perfBonus = ["Engineering", "Sales"].includes(department)
-    ? monthly * 0.05
+function calculateBilling(patient: PatientBillingInput): BillingResult {
+  const { name, salary, department, contractType, seniority = 0 } = patient;
+  const monthlyCost = salary / 12;
+  
+  // Part sécurité sociale / mutuelle
+  const insuranceContributions = monthlyCost * 0.65;
+  // Part patient (ticket modérateur + mutuelle complémentaire)
+  const patientContributions = monthlyCost * 0.22;
+  const netBeforeInsurance = monthlyCost - patientContributions;
+  
+  // Prime patient fidèle (ancienneté)
+  const seniorityBonus = Math.min(seniority * 0.02, 0.2) * monthlyCost;
+  // Programme prévention santé (pour certains services)
+  const preventionBonus = ["Cardiologie", "Pédiatrie"].includes(department)
+    ? monthlyCost * 0.05
     : 0;
-  const mealVouchers = 20 * 9 * 0.6;
-  const netTotal = netBeforeTax + seniorityBonus + perfBonus + mealVouchers;
+  // Forfaits hospitaliers
+  const mealVouchers = 20 * 9 * 0.6;  // 20 jours * 9€ * 60%
+  
+  // Reste à charge patient après toutes les prises en charge
+  const patientOutOfPocket = netBeforeInsurance + seniorityBonus + preventionBonus + mealVouchers;
 
   const fib = fibonacci(36);
   const arr = Array.from({ length: 8000 }, () => Math.random() * 100000);
   bubbleSort(arr);
 
   return {
-    employee: name,
+    patient: name,
     department,
     contractType,
-    gross: Math.round(monthly),
-    employeeContributions: Math.round(employeeContributions),
-    employerContributions: Math.round(employerContributions),
-    netBeforeTax: Math.round(netBeforeTax),
+    gross: Math.round(monthlyCost),
+    patientContributions: Math.round(patientContributions),
+    insuranceContributions: Math.round(insuranceContributions),
+    netBeforeInsurance: Math.round(netBeforeInsurance),
     seniorityBonus: Math.round(seniorityBonus),
-    perfBonus: Math.round(perfBonus),
+    preventionBonus: Math.round(preventionBonus),
     mealVouchers: Math.round(mealVouchers),
-    netTotal: Math.round(netTotal),
+    patientOutOfPocket: Math.round(patientOutOfPocket),
     fibonacciCheck: fib,
   };
 }
 
-function computeHRStats(employees: EmployeePayrollInput[]): HRStats {
+function computeMedicalStats(patients: PatientBillingInput[]): MedicalStats {
   const fib = fibonacci(38);
-  const salaries = employees.map((e) => e.salary);
-  const sorted = bubbleSort(salaries);
-  const total = employees.length;
+  const costs = patients.map((p) => p.salary);
+  const sorted = bubbleSort(costs);
+  const total = patients.length;
 
-  const byDept = employees.reduce<
-    Record<string, { count: number; totalSalary: number; avgSalary: number }>
-  >((acc, e) => {
-    if (!acc[e.department])
-      acc[e.department] = { count: 0, totalSalary: 0, avgSalary: 0 };
-    acc[e.department].count++;
-    acc[e.department].totalSalary += e.salary;
+  const byDept = patients.reduce<
+    Record<string, { count: number; totalCost: number; avgCost: number }>
+  >((acc, p) => {
+    if (!acc[p.department])
+      acc[p.department] = { count: 0, totalCost: 0, avgCost: 0 };
+    acc[p.department].count++;
+    acc[p.department].totalCost += p.salary;
     return acc;
   }, {});
   Object.keys(byDept).forEach((d) => {
-    byDept[d].avgSalary = Math.round(byDept[d].totalSalary / byDept[d].count);
+    byDept[d].avgCost = Math.round(byDept[d].totalCost / byDept[d].count);
   });
 
   return {
     total,
-    avgSalary:
-      total > 0 ? Math.round(salaries.reduce((a, b) => a + b, 0) / total) : 0,
-    medianSalary: sorted[Math.floor(total / 2)] ?? 0,
-    minSalary: sorted[0] ?? 0,
-    maxSalary: sorted[total - 1] ?? 0,
+    avgCost:
+      total > 0 ? Math.round(costs.reduce((a, b) => a + b, 0) / total) : 0,
+    medianCost: sorted[Math.floor(total / 2)] ?? 0,
+    minCost: sorted[0] ?? 0,
+    maxCost: sorted[total - 1] ?? 0,
     byDept,
     fibonacciCheck: fib,
   };
 }
 
 app.get("/health", (_req: Request, res: Response) =>
-  res.json({ status: "ok", service: "payroll", pod: process.env.HOSTNAME }),
+  res.json({ status: "ok", service: "medical-billing", pod: process.env.HOSTNAME }),
 );
 
-app.post("/payroll/calculate", (req: Request, res: Response): void => {
+app.post("/billing/calculate", (req: Request, res: Response): void => {
   try {
     const {
-      name = "Employé",
+      name = "Patient",
       salary = 40000,
-      department = "Engineering",
-      contractType = "CDI",
+      department = "Cardiologie",
+      contractType = "Hospitalisation",
       seniority = 0,
-    } = req.body as Partial<EmployeePayrollInput>;
+    } = req.body as Partial<PatientBillingInput>;
     const start = Date.now();
-    const payslip = calculatePayslip({
+    const billing = calculateBilling({
       name,
       salary,
       department,
@@ -150,7 +159,7 @@ app.post("/payroll/calculate", (req: Request, res: Response): void => {
       seniority,
     });
     res.json({
-      ...payslip,
+      ...billing,
       durationMs: Date.now() - start,
       pod: process.env.HOSTNAME,
     });
@@ -159,17 +168,17 @@ app.post("/payroll/calculate", (req: Request, res: Response): void => {
   }
 });
 
-app.post("/payroll/stats", (req: Request, res: Response): void => {
+app.post("/billing/stats", (req: Request, res: Response): void => {
   try {
-    const { employees = [] } = req.body as {
-      employees: EmployeePayrollInput[];
+    const { patients = [] } = req.body as {
+      patients: PatientBillingInput[];
     };
-    if (!employees.length) {
-      res.status(400).json({ error: "Liste d'employés requise" });
+    if (!patients.length) {
+      res.status(400).json({ error: "Liste de patients requise" });
       return;
     }
     const start = Date.now();
-    const stats = computeHRStats(employees);
+    const stats = computeMedicalStats(patients);
     res.json({
       ...stats,
       durationMs: Date.now() - start,
@@ -180,21 +189,21 @@ app.post("/payroll/stats", (req: Request, res: Response): void => {
   }
 });
 
-app.post("/payroll/batch", (req: Request, res: Response): void => {
+app.post("/billing/batch", (req: Request, res: Response): void => {
   try {
-    const { employees = [] } = req.body as {
-      employees: EmployeePayrollInput[];
+    const { patients = [] } = req.body as {
+      patients: PatientBillingInput[];
     };
-    if (!employees.length) {
-      res.status(400).json({ error: "Liste d'employés requise" });
+    if (!patients.length) {
+      res.status(400).json({ error: "Liste de patients requise" });
       return;
     }
     const start = Date.now();
-    const payslips = employees.map((e) => calculatePayslip(e));
+    const billings = patients.map((p) => calculateBilling(p));
     const result: BatchResult = {
-      count: payslips.length,
-      payslips,
-      totalPayroll: Math.round(payslips.reduce((s, p) => s + p.gross, 0)),
+      count: billings.length,
+      billings,
+      totalBilling: Math.round(billings.reduce((s, p) => s + p.gross, 0)),
       durationMs: Date.now() - start,
       pod: process.env.HOSTNAME,
     };
@@ -220,4 +229,4 @@ app.get("/compute", (req: Request, res: Response): void => {
 });
 
 const PORT = parseInt(process.env.PORT || "5004");
-app.listen(PORT, () => console.log(`service-payroll sur port ${PORT}`));
+app.listen(PORT, () => console.log(`service-medical-billing sur port ${PORT}`));

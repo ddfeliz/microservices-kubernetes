@@ -8,25 +8,26 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-type LeaveStatus = "pending" | "approved" | "rejected" | "cancelled";
-type LeaveType =
-  | "Congé Payé"
-  | "RTT"
-  | "Maladie"
-  | "Maternité"
-  | "Paternité"
-  | "Sans Solde"
-  | "Exceptionnel";
+type AppointmentStatus = "pending" | "approved" | "rejected" | "cancelled";
+type AppointmentType =
+  | "Consultation générale"
+  | "Consultation spécialiste"
+  | "Urgence"
+  | "Téléconsultation"
+  | "Chirurgie programmée"
+  | "Examen radiologique"
+  | "IRM / Scanner"
+  | "Analyse biologique";
 
-interface ILeave extends Document {
-  employeeId: string;
-  employeeName: string;
+interface IAppointment extends Document {
+  patientId: string;
+  patientName: string;
   department: string;
-  type: LeaveType;
+  type: AppointmentType;
   startDate: Date;
   endDate: Date;
-  days: number;
-  status: LeaveStatus;
+  durationHours: number;
+  status: AppointmentStatus;
   reason: string;
   comment: string;
   approvedBy: string | null;
@@ -36,39 +37,40 @@ interface ILeave extends Document {
   updatedAt: Date;
 }
 
-interface LeaveQuery {
+interface AppointmentQuery {
   status?: string;
-  employeeId?: string;
+  patientId?: string;
   type?: string;
 }
 
 interface StatusUpdateBody {
-  status: LeaveStatus;
+  status: AppointmentStatus;
   comment?: string;
   approvedBy?: string;
 }
 
-const leaveSchema = new Schema<ILeave>(
+const appointmentSchema = new Schema<IAppointment>(
   {
-    employeeId: { type: String, required: true },
-    employeeName: { type: String, required: true },
+    patientId: { type: String, required: true },
+    patientName: { type: String, required: true },
     department: { type: String, default: "" },
     type: {
       type: String,
       required: true,
       enum: [
-        "Congé Payé",
-        "RTT",
-        "Maladie",
-        "Maternité",
-        "Paternité",
-        "Sans Solde",
-        "Exceptionnel",
+        "Consultation générale",
+        "Consultation spécialiste",
+        "Urgence",
+        "Téléconsultation",
+        "Chirurgie programmée",
+        "Examen radiologique",
+        "IRM / Scanner",
+        "Analyse biologique",
       ],
     },
     startDate: { type: Date, required: true },
     endDate: { type: Date, required: true },
-    days: { type: Number, required: true, min: 0.5 },
+    durationHours: { type: Number, required: true, min: 0.5 },
     status: {
       type: String,
       enum: ["pending", "approved", "rejected", "cancelled"],
@@ -83,18 +85,18 @@ const leaveSchema = new Schema<ILeave>(
   { timestamps: true },
 );
 
-const Leave = mongoose.model<ILeave>("Leave", leaveSchema);
+const Appointment = mongoose.model<IAppointment>("Appointment", appointmentSchema);
 
 function validate(req: Request, res: Response, next: NextFunction): void {
-  const { employeeId, employeeName, type, startDate, endDate, days } =
-    req.body as Partial<ILeave>;
+  const { patientId, patientName, type, startDate, endDate, durationHours } =
+    req.body as Partial<IAppointment>;
   const errors: string[] = [];
-  if (!employeeId) errors.push("employeeId requis");
-  if (!employeeName) errors.push("employeeName requis");
-  if (!type) errors.push("type requis");
+  if (!patientId) errors.push("patientId requis");
+  if (!patientName) errors.push("patientName requis");
+  if (!type) errors.push("type de consultation requis");
   if (!startDate) errors.push("startDate requis");
   if (!endDate) errors.push("endDate requis");
-  if (!days || days < 0.5) errors.push("days doit être >= 0.5");
+  if (!durationHours || durationHours < 0.5) errors.push("durationHours doit être >= 0.5");
   if (startDate && endDate && new Date(startDate) > new Date(endDate))
     errors.push("startDate doit être avant endDate");
   if (errors.length) {
@@ -105,31 +107,31 @@ function validate(req: Request, res: Response, next: NextFunction): void {
 }
 
 app.get("/health", (_req: Request, res: Response) =>
-  res.json({ status: "ok", service: "leaves", pod: process.env.HOSTNAME }),
+  res.json({ status: "ok", service: "appointments", pod: process.env.HOSTNAME }),
 );
 
-app.get("/leaves", async (req: Request, res: Response): Promise<void> => {
+app.get("/appointments", async (req: Request, res: Response): Promise<void> => {
   try {
     const {
       status,
-      employeeId,
+      patientId,
       type,
       page = "1",
       limit = "20",
     } = req.query as Record<string, string>;
-    const filter: QueryFilter<ILeave> = {};
-    if (status) filter.status = status as LeaveStatus;
-    if (employeeId) filter.employeeId = employeeId;
-    if (type) filter.type = type as LeaveType;
+    const filter: QueryFilter<IAppointment> = {};
+    if (status) filter.status = status as AppointmentStatus;
+    if (patientId) filter.patientId = patientId;
+    if (type) filter.type = type as AppointmentType;
 
-    const total = await Leave.countDocuments(filter);
-    const leaves = await Leave.find(filter)
+    const total = await Appointment.countDocuments(filter);
+    const appointments = await Appointment.find(filter)
       .sort({ createdAt: -1 })
       .skip((parseInt(page) - 1) * parseInt(limit))
       .limit(parseInt(limit));
 
     res.json({
-      data: leaves,
+      data: appointments,
       total,
       page: parseInt(page),
       limit: parseInt(limit),
@@ -140,35 +142,35 @@ app.get("/leaves", async (req: Request, res: Response): Promise<void> => {
 });
 
 app.get(
-  "/leaves/stats",
+  "/appointments/stats",
   async (_req: Request, res: Response): Promise<void> => {
     try {
       const [byStatus, byType, byDepartment, pending] = await Promise.all([
-        Leave.aggregate<{ _id: string; count: number; totalDays: number }>([
+        Appointment.aggregate<{ _id: string; count: number; totalHours: number }>([
           {
             $group: {
               _id: "$status",
               count: { $sum: 1 },
-              totalDays: { $sum: "$days" },
+              totalHours: { $sum: "$durationHours" },
             },
           },
         ]),
-        Leave.aggregate<{ _id: string; count: number; totalDays: number }>([
+        Appointment.aggregate<{ _id: string; count: number; totalHours: number }>([
           {
             $group: {
               _id: "$type",
               count: { $sum: 1 },
-              totalDays: { $sum: "$days" },
+              totalHours: { $sum: "$durationHours" },
             },
           },
           { $sort: { count: -1 } },
         ]),
-        Leave.aggregate<{ _id: string; totalDays: number }>([
+        Appointment.aggregate<{ _id: string; totalHours: number }>([
           { $match: { status: "approved" } },
-          { $group: { _id: "$department", totalDays: { $sum: "$days" } } },
-          { $sort: { totalDays: -1 } },
+          { $group: { _id: "$department", totalHours: { $sum: "$durationHours" } } },
+          { $sort: { totalHours: -1 } },
         ]),
-        Leave.countDocuments({ status: "pending" }),
+        Appointment.countDocuments({ status: "pending" }),
       ]);
       res.json({ byStatus, byType, byDepartment, pending });
     } catch (err) {
@@ -177,27 +179,27 @@ app.get(
   },
 );
 
-app.get("/leaves/:id", async (req: Request, res: Response): Promise<void> => {
+app.get("/appointments/:id", async (req: Request, res: Response): Promise<void> => {
   try {
-    const leave = await Leave.findById(req.params.id);
-    if (!leave) {
-      res.status(404).json({ error: "Demande non trouvée" });
+    const appointment = await Appointment.findById(req.params.id);
+    if (!appointment) {
+      res.status(404).json({ error: "Rendez-vous non trouvé" });
       return;
     }
-    res.json(leave);
+    res.json(appointment);
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }
 });
 
 app.post(
-  "/leaves",
+  "/appointments",
   validate,
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const leave = new Leave(req.body as Partial<ILeave>);
-      await leave.save();
-      res.status(201).json(leave);
+      const appointment = new Appointment(req.body as Partial<IAppointment>);
+      await appointment.save();
+      res.status(201).json(appointment);
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }
@@ -205,11 +207,11 @@ app.post(
 );
 
 app.patch(
-  "/leaves/:id/status",
+  "/appointments/:id/status",
   async (req: Request, res: Response): Promise<void> => {
     try {
       const { status, comment, approvedBy } = req.body as StatusUpdateBody;
-      const validStatuses: LeaveStatus[] = [
+      const validStatuses: AppointmentStatus[] = [
         "approved",
         "rejected",
         "cancelled",
@@ -218,16 +220,16 @@ app.patch(
         res.status(400).json({ error: "Statut invalide" });
         return;
       }
-      const leave = await Leave.findByIdAndUpdate(
+      const appointment = await Appointment.findByIdAndUpdate(
         req.params.id,
         { status, comment, approvedBy, approvedAt: new Date() },
         { new: true },
       );
-      if (!leave) {
-        res.status(404).json({ error: "Demande non trouvée" });
+      if (!appointment) {
+        res.status(404).json({ error: "Rendez-vous non trouvé" });
         return;
       }
-      res.json(leave);
+      res.json(appointment);
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }
@@ -235,15 +237,15 @@ app.patch(
 );
 
 app.delete(
-  "/leaves/:id",
+  "/appointments/:id",
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const leave = await Leave.findByIdAndDelete(req.params.id);
-      if (!leave) {
-        res.status(404).json({ error: "Demande non trouvée" });
+      const appointment = await Appointment.findByIdAndDelete(req.params.id);
+      if (!appointment) {
+        res.status(404).json({ error: "Rendez-vous non trouvé" });
         return;
       }
-      res.json({ message: "Demande supprimée" });
+      res.json({ message: "Rendez-vous supprimé" });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }
@@ -251,94 +253,129 @@ app.delete(
 );
 
 app.post(
-  "/leaves/seed",
+  "/appointments/seed",
   async (_req: Request, res: Response): Promise<void> => {
     try {
-      await Leave.deleteMany({});
-      const leaves: Partial<ILeave>[] = [
+      await Appointment.deleteMany({});
+      const appointments: Partial<IAppointment>[] = [
         {
-          employeeId: "EMP-0001",
-          employeeName: "Sophie Martin",
-          department: "HR",
-          type: "Congé Payé",
-          startDate: new Date("2026-06-01"),
-          endDate: new Date("2026-06-14"),
-          days: 10,
+          patientId: "PAT-0001",
+          patientName: "Sophie Martin",
+          department: "Cardiologie",
+          type: "Consultation spécialiste",
+          startDate: new Date("2026-06-01T10:00:00"),
+          endDate: new Date("2026-06-01T11:00:00"),
+          durationHours: 1,
           status: "approved",
-          reason: "Vacances d'été",
-          approvedBy: "EMP-0004",
+          reason: "Douleurs thoraciques",
+          approvedBy: "Dr. Dupont",
         },
         {
-          employeeId: "EMP-0002",
-          employeeName: "Lucas Bernard",
-          department: "Engineering",
-          type: "RTT",
-          startDate: new Date("2026-05-20"),
-          endDate: new Date("2026-05-20"),
-          days: 1,
+          patientId: "PAT-0002",
+          patientName: "Lucas Bernard",
+          department: "Pédiatrie",
+          type: "Consultation générale",
+          startDate: new Date("2026-05-20T14:30:00"),
+          endDate: new Date("2026-05-20T15:00:00"),
+          durationHours: 0.5,
           status: "approved",
-          reason: "Récupération",
+          reason: "Contrôle annuel",
         },
         {
-          employeeId: "EMP-0003",
-          employeeName: "Emma Dubois",
-          department: "Engineering",
-          type: "Maladie",
-          startDate: new Date("2026-05-10"),
-          endDate: new Date("2026-05-12"),
-          days: 3,
+          patientId: "PAT-0003",
+          patientName: "Emma Dubois",
+          department: "Radiologie",
+          type: "IRM / Scanner",
+          startDate: new Date("2026-05-10T09:00:00"),
+          endDate: new Date("2026-05-10T09:45:00"),
+          durationHours: 0.75,
           status: "approved",
-          reason: "Certificat médical fourni",
+          reason: "Lombalgies chroniques",
         },
         {
-          employeeId: "EMP-0006",
-          employeeName: "Antoine Leroy",
-          department: "Engineering",
-          type: "Congé Payé",
-          startDate: new Date("2026-07-14"),
-          endDate: new Date("2026-07-25"),
-          days: 8,
+          patientId: "PAT-0006",
+          patientName: "Antoine Leroy",
+          department: "Neurologie",
+          type: "Consultation spécialiste",
+          startDate: new Date("2026-07-14T11:00:00"),
+          endDate: new Date("2026-07-14T12:00:00"),
+          durationHours: 1,
           status: "pending",
-          reason: "Voyage familial",
+          reason: "Maux de tête récurrents",
         },
         {
-          employeeId: "EMP-0005",
-          employeeName: "Camille Robert",
-          department: "Marketing",
-          type: "RTT",
-          startDate: new Date("2026-05-23"),
-          endDate: new Date("2026-05-23"),
-          days: 1,
+          patientId: "PAT-0005",
+          patientName: "Camille Robert",
+          department: "Urgences",
+          type: "Urgence",
+          startDate: new Date("2026-05-23T08:30:00"),
+          endDate: new Date("2026-05-23T10:00:00"),
+          durationHours: 1.5,
           status: "pending",
-          reason: "Pont de l'Ascension",
+          reason: "Fièvre élevée et douleurs",
         },
         {
-          employeeId: "EMP-0007",
-          employeeName: "Julie Moreau",
-          department: "HR",
-          type: "Maternité",
-          startDate: new Date("2026-06-15"),
-          endDate: new Date("2026-09-15"),
-          days: 90,
+          patientId: "PAT-0007",
+          patientName: "Julie Moreau",
+          department: "Chirurgie",
+          type: "Chirurgie programmée",
+          startDate: new Date("2026-06-15T08:00:00"),
+          endDate: new Date("2026-06-15T12:00:00"),
+          durationHours: 4,
           status: "approved",
-          reason: "Congé maternité légal",
+          reason: "Opération du genou",
+          approvedBy: "Dr. Martin",
         },
         {
-          employeeId: "EMP-0008",
-          employeeName: "Nicolas Simon",
-          department: "Sales",
-          type: "Sans Solde",
-          startDate: new Date("2026-08-01"),
-          endDate: new Date("2026-08-15"),
-          days: 11,
+          patientId: "PAT-0008",
+          patientName: "Nicolas Simon",
+          department: "Dermatologie",
+          type: "Consultation générale",
+          startDate: new Date("2026-08-01T13:30:00"),
+          endDate: new Date("2026-08-01T14:00:00"),
+          durationHours: 0.5,
           status: "rejected",
-          reason: "Projet personnel",
-          comment: "Période haute pour les ventes",
+          reason: "Examen de la peau",
+          comment: "Déjà suivi par un autre spécialiste",
+        },
+        {
+          patientId: "PAT-0009",
+          patientName: "Laura Michel",
+          department: "Laboratoire",
+          type: "Analyse biologique",
+          startDate: new Date("2026-05-25T07:30:00"),
+          endDate: new Date("2026-05-25T08:00:00"),
+          durationHours: 0.5,
+          status: "approved",
+          reason: "Bilan sanguin annuel",
+        },
+        {
+          patientId: "PAT-0010",
+          patientName: "Thomas Bernard",
+          department: "Téléconsultation",
+          type: "Téléconsultation",
+          startDate: new Date("2026-05-28T15:00:00"),
+          endDate: new Date("2026-05-28T15:30:00"),
+          durationHours: 0.5,
+          status: "pending",
+          reason: "Suivi traitement",
+        },
+        {
+          patientId: "PAT-0011",
+          patientName: "Marie Lambert",
+          department: "Radiologie",
+          type: "Examen radiologique",
+          startDate: new Date("2026-06-05T14:00:00"),
+          endDate: new Date("2026-06-05T14:20:00"),
+          durationHours: 0.33,
+          status: "approved",
+          reason: "Fracture suspectée",
+          approvedBy: "Dr. Petit",
         },
       ];
-      const created = await Leave.insertMany(leaves);
+      const created = await Appointment.insertMany(appointments);
       res.json({
-        message: `${created.length} demandes créées`,
+        message: `${created.length} rendez-vous créés`,
         count: created.length,
       });
     } catch (err) {
@@ -348,9 +385,9 @@ app.post(
 );
 
 mongoose
-  .connect(process.env.MONGO_URI || "mongodb://mongo:27017/leavesdb")
+  .connect(process.env.MONGO_URI || "mongodb://mongo:27017/appointmentsdb")
   .then(() => {
-    const PORT = parseInt(process.env.PORT || "5001");
-    app.listen(PORT, () => console.log(`service-leaves sur port ${PORT}`));
+    const PORT = parseInt(process.env.PORT || "5002");
+    app.listen(PORT, () => console.log(`service-appointments sur port ${PORT}`));
   })
   .catch((err) => console.error("Erreur MongoDB:", err));

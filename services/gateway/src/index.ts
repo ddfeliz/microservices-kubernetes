@@ -8,17 +8,17 @@ app.use(cors());
 app.use(express.json());
 
 interface Services {
-  tasks: string;
-  users: string;
-  notify: string;
-  compute: string;
+  patients: string;
+  appointments: string;
+  alerts: string;
+  billing: string;
 }
 
 const SERVICES: Services = {
-  tasks: process.env.TASKS_URL || "http://service-tasks:5001",
-  users: process.env.USERS_URL || "http://service-users:5002",
-  notify: process.env.NOTIFY_URL || "http://service-notify:5003",
-  compute: process.env.COMPUTE_URL || "http://service-compute:5004",
+  patients: process.env.PATIENTS_URL || "http://service-patients:5001",
+  appointments: process.env.APPOINTMENTS_URL || "http://service-appointments:5002",
+  alerts: process.env.ALERTS_URL || "http://service-alerts:5003",
+  billing: process.env.BILLING_URL || "http://service-billing:5004",
 };
 
 async function proxyRequest(
@@ -45,29 +45,29 @@ async function proxyRequest(
     res.status(response.status).json(data);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erreur inconnue";
-    res.status(502).json({ error: "Service indisponible", detail: message });
+    res.status(502).json({ error: "Service médical indisponible", detail: message });
   }
 }
 
 app.get("/health", (_req: Request, res: Response) =>
-  res.json({ status: "ok", service: "gateway", services: SERVICES }),
+  res.json({ status: "ok", service: "medical-gateway", services: SERVICES }),
 );
 
 app.use("/api/employees", (req: Request, res: Response) =>
-  proxyRequest(req, res, `${SERVICES.users}/employees`),
+  proxyRequest(req, res, `${SERVICES.patients}/patients`),
 );
 app.use("/api/leaves", (req: Request, res: Response) =>
-  proxyRequest(req, res, `${SERVICES.tasks}/leaves`),
+  proxyRequest(req, res, `${SERVICES.appointments}/appointments`),
 );
 app.use("/api/notify", (req: Request, res: Response) =>
-  proxyRequest(req, res, `${SERVICES.notify}/notifications`),
+  proxyRequest(req, res, `${SERVICES.alerts}/alerts`),
 );
 app.use("/api/payroll", (req: Request, res: Response) =>
-  proxyRequest(req, res, `${SERVICES.compute}/payroll`),
+  proxyRequest(req, res, `${SERVICES.billing}/billing`),
 );
 app.use("/api/compute", (req: Request, res: Response) =>
-  proxyRequest(req, res, `${SERVICES.compute}/compute`),
+  proxyRequest(req, res, `${SERVICES.billing}/compute`),
 );
 
 const PORT = parseInt(process.env.PORT || "4000");
-app.listen(PORT, () => console.log(`service-gateway sur port ${PORT}`));
+app.listen(PORT, () => console.log(`service-gateway-medical sur port ${PORT}`));
